@@ -16,6 +16,7 @@ namespace IMGUI_Helper.UI
             public const string Sliders = "Sliders";
             public const string Layout = "Layout";
             public const string Performance = "Perf";
+            public const string States = "States";
             public const string Windows = "Windows";
         }
 

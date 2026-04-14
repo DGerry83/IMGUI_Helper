@@ -10,7 +10,7 @@ namespace IMGUI_Helper.UI
         private Rect _mainRect = new Rect(100, 100, 520, 650);
         private bool _isVisible = false;
 
-        private enum DemoTab { Basics, Sliders, Layout, Performance, Windows }
+        private enum DemoTab { Basics, Sliders, Layout, Performance, States, Windows }
         private DemoTab _currentTab = DemoTab.Basics;
 
         private GUIStyle _windowStyle;
@@ -22,6 +22,7 @@ namespace IMGUI_Helper.UI
         private SlidersTab _slidersTab;
         private LayoutTab _layoutTab;
         private PerformanceTab _performanceTab;
+        private StatesTab _statesTab;
         private WindowsTab _windowsTab;
 
         public IMGUIHelperWindow()
@@ -30,6 +31,7 @@ namespace IMGUI_Helper.UI
             _slidersTab = new SlidersTab();
             _layoutTab = new LayoutTab();
             _performanceTab = new PerformanceTab();
+            _statesTab = new StatesTab();
             _windowsTab = new WindowsTab();
         }
 
@@ -102,6 +104,9 @@ namespace IMGUI_Helper.UI
                 case DemoTab.Performance:
                     _performanceTab.Draw();
                     break;
+                case DemoTab.States:
+                    _statesTab.Draw();
+                    break;
                 case DemoTab.Windows:
                     _windowsTab.Draw();
                     break;
@@ -125,6 +130,7 @@ namespace IMGUI_Helper.UI
             DrawTabButton(IMGUIHelperUIStrings.Tabs.Sliders, DemoTab.Sliders);
             DrawTabButton(IMGUIHelperUIStrings.Tabs.Layout, DemoTab.Layout);
             DrawTabButton(IMGUIHelperUIStrings.Tabs.Performance, DemoTab.Performance);
+            DrawTabButton(IMGUIHelperUIStrings.Tabs.States, DemoTab.States);
             DrawTabButton(IMGUIHelperUIStrings.Tabs.Windows, DemoTab.Windows);
 
             GUILayout.EndHorizontal();
@@ -135,7 +141,7 @@ namespace IMGUI_Helper.UI
             GUIStyle style = (_currentTab == tab) ? _tabButtonActiveStyle : _tabButtonStyle;
             if (GUILayout.Button(label, style,
                 GUILayout.Height(IMGUIHelperUIResources.Layout.Tabs.BUTTON_HEIGHT),
-                GUILayout.Width(IMGUIHelperUIResources.Layout.Tabs.BUTTON_WIDTH)))
+                GUILayout.Width(72)))
             {
                 _currentTab = tab;
             }

@@ -50,6 +50,7 @@
     <Compile Include="UI\Tabs\SlidersTab.cs" />
     <Compile Include="UI\Tabs\LayoutTab.cs" />
     <Compile Include="UI\Tabs\PerformanceTab.cs" />
+    <Compile Include="UI\Tabs\StatesTab.cs" />
     <Compile Include="UI\Tabs\WindowsTab.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
