@@ -3,6 +3,8 @@
 **Context:** Immediate Mode GUI patterns for Kerbal Space Program mod development.  
 **Core Constraint:** IMGUI rebuilds the entire UI description every frame—no persistent widget state exists between frames.
 
+**Reference Implementation:** See `IMGUI_Helper/UI/` for the working source-of-truth codebase.
+
 ---
 
 ## 1. Event System Architecture
@@ -14,7 +16,7 @@ IMGUI executes multiple passes per frame. Code must be pass-aware.
 |------|---------|
 | `Layout` | Calculate element geometry and positions |
 | `Repaint` | Execute actual rendering |
-| Input Events | `MouseMove`, `MouseDown`, `ScrollWheel`, etc. |
+| Input Events | `MouseDown`, `MouseUp`, `ScrollWheel`, etc. |
 
 ### 1.2 Critical Rule: Layout Query Timing
 **Only query layout rectangles during `Repaint`.**
@@ -93,18 +95,9 @@ Each layer triggers recursive layout calculations—deep nesting causes frame ti
 **Pattern:** Static layout configuration classes.
 
 ```csharp
-// CinematicShadersUIResources.Layout.LabelWidth example
-GUILayout.Label(label, GUILayout.Width(CinematicShadersUIResources.Layout.LabelWidth));
-
-// Or local constants
-const float LABEL_WIDTH = 150f;
+// IMGUIHelperUIResources.Layout example
+GUILayout.Label(label, GUILayout.Width(IMGUIHelperUIResources.Layout.Labels.DEFAULT_WIDTH));
 ```
-
-**Spacing Constants:**
-- `NORMAL = 10`
-- `TIGHT = 4`
-- `SECTION = 15`
-- `LARGE = 15`
 
 ### 4.3 Horizontal Grouping for Label+Control
 **Stable Pattern:**
@@ -119,10 +112,8 @@ GUILayout.EndHorizontal();
 Prevent `GUILayout.Window` from stretching based on content by constraining the inner layout:
 
 ```csharp
-// Outer window call
 _windowRect = GUILayout.Window(WINDOW_ID, _windowRect, DrawWindow, "Title");
 
-// Inner content
 void DrawWindow(int id)
 {
     GUILayout.BeginVertical(GUILayout.Width(300));
@@ -131,6 +122,29 @@ void DrawWindow(int id)
     GUI.DragWindow();
 }
 ```
+
+### 4.5 Demarcated Sections
+Use `GUI.skin.box` to create visually separated panels with internal columns:
+
+```csharp
+GUILayout.BeginVertical(GUI.skin.box);
+GUILayout.BeginHorizontal();
+
+GUILayout.BeginVertical(GUILayout.Width(160));
+DrawButtonGrid();
+GUILayout.EndVertical();
+
+GUILayout.Space(10);
+
+GUILayout.BeginVertical(GUILayout.Width(240));
+DrawInstructions();
+GUILayout.EndVertical();
+
+GUILayout.EndHorizontal();
+GUILayout.EndVertical();
+```
+
+*Reference: `StatesTab.cs` — 4×4 multi-state button grid with instructional text column.*
 
 ---
 
@@ -226,7 +240,7 @@ GUILayout.EndScrollView();
 ```
 
 ### 5.3 Collapsible Sections
-Use foldouts to prevent layout cost for hidden UI sections:
+Use instant foldouts to prevent layout cost for hidden UI sections. **Height animation with `GUILayout` causes layout oscillation and jumpiness**—avoid it.
 
 ```csharp
 _showSection = GUILayout.Toggle(
@@ -249,72 +263,53 @@ if (_showSection)
 Horizontal tab bar with active/inactive visual states:
 
 ```csharp
-public enum ShaderTab { GTAO, Starfield, Kartographer }
-private ShaderTab currentTab = ShaderTab.GTAO;
+public enum DemoTab { Basics, Sliders, Layout }
+private DemoTab currentTab = DemoTab.Basics;
 
 private void DrawTabs()
 {
     GUILayout.BeginHorizontal();
 
-    GUIStyle gtaoStyle = (currentTab == ShaderTab.GTAO) ? tabButtonActiveStyle : tabButtonStyle;
-    if (GUILayout.Button("GTAO", gtaoStyle, GUILayout.Height(30), GUILayout.Width(100)))
-        currentTab = ShaderTab.GTAO;
-
-    GUIStyle starfieldStyle = (currentTab == ShaderTab.Starfield) ? tabButtonActiveStyle : tabButtonStyle;
-    if (GUILayout.Button("Starfield", starfieldStyle, GUILayout.Height(30), GUILayout.Width(100)))
-        currentTab = ShaderTab.Starfield;
+    GUIStyle style = (currentTab == DemoTab.Basics) ? tabButtonActiveStyle : tabButtonStyle;
+    if (GUILayout.Button("Basics", style, GUILayout.Height(28), GUILayout.Width(72)))
+        currentTab = DemoTab.Basics;
 
     GUILayout.EndHorizontal();
-}
-```
-
-**Active Style Pattern:**
-```csharp
-public static GUIStyle TabButtonActive()
-{
-    GUIStyle style = new GUIStyle(HighLogic.Skin.button);
-    style.normal.textColor = new Color(0.2f, 0.9f, 0.2f);
-    style.fontStyle = FontStyle.Bold;
-    return style;
 }
 ```
 
 ### 6.2 Dropdown Menus
-Custom dropdown with mutual exclusivity (opening one closes the other):
+Draw dropdown content **inline inside the window callback** using `GUILayout`. Do not use `BeginArea` with cached rects from window-local space.
 
 ```csharp
-private bool _showQualityDropdown = false;
-private bool _showDebugDropdown = false;
-private int _qualityPresetIndex = 0;
-private string[] _qualityNames = { "Low", "Medium", "High", "Ultra" };
+private bool _showDropdown = false;
+private int _dropdownIndex = 0;
+private string[] _options = { "Low", "Medium", "High", "Ultra" };
 
-private void DrawQualityDropdown()
+GUILayout.BeginHorizontal();
+GUILayout.Label("Quality", GUILayout.Width(80));
+if (GUILayout.Button(_options[_dropdownIndex], GUILayout.Width(100)))
 {
-    GUILayout.BeginHorizontal();
-    GUILayout.Label("Quality", GUILayout.Width(80));
+    _showDropdown = !_showDropdown;
+}
+GUILayout.EndHorizontal();
 
-    if (GUILayout.Button(_qualityNames[_qualityPresetIndex], GUILayout.Width(100)))
+if (_showDropdown)
+{
+    GUILayout.BeginVertical(GUI.skin.box);
+    for (int i = 0; i < _options.Length; i++)
     {
-        _showQualityDropdown = !_showQualityDropdown;
-        _showDebugDropdown = false; // Close other dropdown
-    }
-    GUILayout.EndHorizontal();
-
-    if (_showQualityDropdown)
-    {
-        GUILayout.BeginVertical(GUI.skin.box);
-        for (int i = 0; i < _qualityNames.Length; i++)
+        if (GUILayout.Button(_options[i]))
         {
-            if (GUILayout.Button(_qualityNames[i]))
-            {
-                _qualityPresetIndex = i;
-                _showQualityDropdown = false;
-            }
+            _dropdownIndex = i;
+            _showDropdown = false;
         }
-        GUILayout.EndVertical();
     }
+    GUILayout.EndVertical();
 }
 ```
+
+*Reference: `LayoutTab.cs`, `BasicsTab.cs` (colored dropdown variant).*
 
 ### 6.3 Toggle Buttons (Button-Style Toggles)
 Useful for mode selection where only one option can be active:
@@ -333,12 +328,12 @@ else if (newSoft && !useSoft)
 ```
 
 ### 6.4 SelectionGrid
-Vertical or horizontal radio-button-like selection:
+Vertical or horizontal radio-button-like selection. Use `HighLogic.Skin.button` for horizontal layouts to prevent text overlap:
 
 ```csharp
 string[] options = { "KSP", "Retro" };
 int currentStyle = (int)_selectedStyle;
-int newStyle = GUILayout.SelectionGrid(currentStyle, options, 1, HighLogic.Skin.toggle);
+int newStyle = GUILayout.SelectionGrid(currentStyle, options, 1, HighLogic.Skin.button);
 if (newStyle != currentStyle)
     _selectedStyle = (MyEnum)newStyle;
 ```
@@ -354,26 +349,49 @@ public static GUIStyle ColorButton(Color backgroundColor)
     tex.SetPixel(0, 0, backgroundColor);
     tex.Apply();
     style.normal.background = tex;
-    style.normal.textColor = Color.black;
     style.hover.background = tex;
     style.active.background = tex;
+    style.normal.textColor = Color.white;
     return style;
 }
 ```
 
-*Note: In a wrapper API, cache the texture to avoid per-frame allocation.*
+*Cache the resulting style in an array if reused every frame.*  
+*Reference: `BasicsTab.cs` colored dropdown, `StatesTab.cs` multi-state grid.*
 
 ### 6.6 Active/Inactive Visual States
 Consistent pattern for toggles and buttons that need to show "on" vs "off" state:
 
 ```csharp
 GUIStyle toggleStyle = _settingEnabled ?
-    CinematicShadersUIResources.Styles.ToggleActive() : HighLogic.Skin.toggle;
+    IMGUIHelperUIResources.Styles.ToggleActive() : HighLogic.Skin.toggle;
 
 bool newValue = GUILayout.Toggle(_settingEnabled, " Enable Feature", toggleStyle);
 if (newValue != _settingEnabled)
     _settingEnabled = newValue;
 ```
+
+### 6.7 Right-Click Button Handling
+IMGUI does not natively expose right-clicks on `GUILayout.Button`. Use `GUILayoutUtility.GetRect` to obtain the button rect, then inspect `Event.current` before calling `GUI.Button`:
+
+```csharp
+Rect buttonRect = GUILayoutUtility.GetRect(32, 30, style);
+
+Event evt = Event.current;
+if (evt.type == EventType.MouseDown && evt.button == 1 && buttonRect.Contains(evt.mousePosition))
+{
+    // Right-click action
+    _state = SlotState.Disarmed;
+    evt.Use(); // Prevent further processing
+}
+else if (GUI.Button(buttonRect, label, style))
+{
+    // Left-click action
+    CycleState();
+}
+```
+
+*Reference: `StatesTab.cs` — 4×4 grid with left-click state cycling and right-click disarm.*
 
 ---
 
@@ -422,9 +440,9 @@ _windowRect.y = Mathf.Clamp(_windowRect.y, 0, Screen.height - _windowRect.height
 Position a secondary window relative to a primary window:
 
 ```csharp
-Rect mainRect = CinematicShadersWindow.Instance.WindowRect;
-_windowRect.x = mainRect.x + mainRect.width + 5f;
-_windowRect.y = mainRect.y;
+Rect mainRect = IMGUIHelperWindow.Instance.WindowRect;
+_dockedRect.x = mainRect.x + mainRect.width + 5f;
+_dockedRect.y = mainRect.y;
 ```
 
 Reset dock state when hidden so it re-docks correctly on next show:
@@ -436,13 +454,16 @@ public void Hide()
 }
 ```
 
+A true docked window omits `GUI.DragWindow()` so it cannot be dragged independently.  
+*Reference: `WindowsTab.cs` — independent vs. docked secondary windows.*
+
 ---
 
 ## 8. Tooltip System
 
-Unity's built-in `GUI.tooltip` is reliable for standard `GUILayout` controls when the `tooltip` parameter of `GUIContent` is set.
+Unity's built-in `GUI.tooltip` is reliable for standard `GUILayout` controls when the `tooltip` parameter of `GUIContent` is set. **You must draw the tooltip manually** inside the window callback.
 
-**Working Pattern:**
+### 8.1 Built-in Tooltip
 ```csharp
 private void DrawTooltip()
 {
@@ -457,11 +478,6 @@ private void DrawTooltip()
     float x = mousePos.x + 15f;
     float y = mousePos.y + 15f;
 
-    // Clamp to window bounds
-    Rect windowRect = CinematicShadersWindow.Instance.WindowRect;
-    x = Mathf.Min(x, windowRect.width - tooltipWidth - 5f);
-    y = Mathf.Min(y, windowRect.height - tooltipHeight - 5f);
-
     GUI.Box(new Rect(x, y, tooltipWidth, tooltipHeight), GUI.tooltip, tooltipStyle);
 }
 ```
@@ -472,7 +488,12 @@ GUIContent labelContent = new GUIContent("Exposure", "EV Stops");
 GUILayout.Label(labelContent, GUILayout.Width(80));
 ```
 
-**Alternative:** For complex custom-drawn controls, custom hover detection using `GUILayoutUtility.GetLastRect()` during `Repaint` is still available as a fallback.
+**Important:** Call `DrawTooltip()` at the end of the window's `Draw()` method so it renders in window-local coordinates.
+
+### 8.2 Custom Hover Tooltip
+For complex custom-drawn controls, use `GUILayoutUtility.GetLastRect()` during `Repaint` as a fallback. Draw the resulting box inside the same window callback.
+
+*Reference: `BasicsTab.cs` — demonstrates both built-in and custom tooltip rendering.*
 
 ---
 
@@ -540,13 +561,15 @@ GUI.Box(GUILayoutUtility.GetLastRect(), GUIContent.none);
 
 | Symptom | Cause | Solution |
 |---------|-------|----------|
-| Tooltip stuck | Wrong coordinate space (GUI vs screen) | Use `Event.current.mousePosition` with rect checks |
+| Tooltip stuck or off-screen | Drawn outside window callback | Move `DrawTooltip()` inside the window callback |
 | Control overlap | Mismatched Begin/End calls | Audit layout group pairing |
 | UI flicker | Code executing during `Layout` pass | Guard with `if (Event.current.type == EventType.Repaint)` |
 | ScrollView reset | Scroll position not stored | Assign back to member: `_scrollPos = GUILayout.BeginScrollView(_scrollPos)` |
 | Window lost offscreen | Missing clamping | Apply `Mathf.Clamp` to `_windowRect.x/y` |
 | Dropdown stays open | No mutual exclusion logic | Close other dropdowns when opening one |
 | Slider "loses" final value | No pending-update catch | Check pending flag at start of `Draw()` |
+| Animated sections jump/glitch | `GUILayout` height animation fights layout pass | Use instant foldouts instead |
+| Right-click not detected on button | `GUI.Button` consumes all mouse events | Use `GetRect` + `Event.current` interception |
 
 ---
 
@@ -607,7 +630,14 @@ void DrawVirtualList(List<string> items, float viewHeight)
 
 **Critical Rule:** Do not use `GUILayout` methods for virtualized items. Use `GUI.Label()`, `GUI.Button()` with explicit `Rect` parameters.
 
-### 12.3 Applications
+### 12.3 Naive vs. Virtualized Comparison
+To demonstrate the difference, maintain a toggle that switches between:
+- **Naive:** `GUILayout.Label` for all items (will stutter at >500 items)
+- **Virtualized:** `GUI.Label(Rect, ...)` for visible items only (smooth regardless of count)
+
+*Reference: `PerformanceTab.cs` — side-by-side naive/virtualized toggle with 1000 items.*
+
+### 12.4 Applications
 - Part catalogs
 - Mod lists
 - Asset browsers
@@ -678,98 +708,30 @@ EndGrid();
 
 ---
 
-## 14. Immediate-Mode Animation
-
-**Constraint:** IMGUI has no retained-state animation system. All motion must be driven procedurally in `OnGUI()` using `Time.deltaTime`.
-
-**Pattern:** Store animation state in `float` member variables; lerp toward targets each frame.
-
-### 14.1 Height Animation (Collapsible Sections)
-
-Anti-pattern: Instant state changes cause UI popping.
-
-Correct implementation:
-
-```csharp
-private float _sectionHeightAnim; // 0 = closed, 1 = open
-
-void DrawAnimatedSection(bool isExpanded)
-{
-    float target = isExpanded ? 1f : 0f;
-
-    // Smooth interpolation
-    _sectionHeightAnim = Mathf.Lerp(
-        _sectionHeightAnim,
-        target,
-        Time.deltaTime * 8f
-    );
-
-    // Calculate current height
-    float currentHeight = Mathf.Lerp(0f, 300f, _sectionHeightAnim);
-
-    // Apply constrained height
-    GUILayout.BeginVertical(GUILayout.Height(currentHeight));
-
-    // Only draw content when visible (optimization)
-    if (_sectionHeightAnim > 0.01f)
-    {
-        DrawSectionControls();
-    }
-
-    GUILayout.EndVertical();
-}
-```
-
-### 14.2 Hover State Animation
-
-```csharp
-private float _hoverState; // 0 = normal, 1 = highlighted
-
-void DrawAnimatedButton(string label, bool isHovered)
-{
-    // Update hover state
-    float target = isHovered ? 1f : 0f;
-    _hoverState = Mathf.Lerp(_hoverState, target, Time.deltaTime * 12f);
-
-    // Apply color interpolation
-    Color normalColor = Color.white;
-    Color hoverColor = Color.cyan;
-    GUI.color = Color.Lerp(normalColor, hoverColor, _hoverState);
-
-    GUILayout.Button(label);
-
-    GUI.color = Color.white; // Restore
-}
-```
-
-### 14.3 Alpha Fade Transitions
-
-```csharp
-// Cross-fade between views
-GUI.color = new Color(1f, 1f, 1f, _fadeAlpha);
-DrawViewContent();
-GUI.color = Color.white;
-```
-
-### 14.4 Animation Threshold Guard
-Always gate content drawing behind animation completion to avoid layout cost for invisible elements:
-
-```csharp
-if (_expandAnim > 0.001f) // Not fully closed
-{
-    DrawExpensiveContent();
-}
-```
-
----
-
-## 15. Architectural Patterns for Large UIs
+## 14. Architectural Patterns for Large UIs
 
 **Constraint:** Complex KSP mods risk "thousand-line Draw() functions" that become unmaintainable.
 
-**Two additional patterns address this:**
+### 14.1 Separation of Concerns
+Organize UI code into discrete responsibilities:
 
-### 15.1 Inspector-Style Layout Framework
+```
+UI/
+  IMGUIHelperUIResources.cs   // Colors, layout constants, style factories
+  IMGUIHelperUIStrings.cs     // Centralized text and localization
+  IMGUIHelperWindow.cs        // Window shell: tabs, IDs, clamping, drag
+  Tabs/
+    BasicsTab.cs              // Tab-specific state + layout
+    SlidersTab.cs
+    LayoutTab.cs
+    PerformanceTab.cs
+    StatesTab.cs
+    WindowsTab.cs
+```
+
+**Reference:** This mirrors the proven architecture used in `CinematicShaders/UI/` and `CinematicRecorder/UI/`.
+
+### 14.2 Inspector-Style Layout Framework
 Auto-generate labeled controls via reflection or configuration objects:
 
 ```csharp
@@ -784,7 +746,7 @@ InspectorField.DrawToggle("Enable Bloom", ref settings.bloomEnabled);
 - Validation integration
 - Reduced code duplication
 
-### 15.2 Stateful UI Models
+### 14.3 Stateful UI Models
 Separate UI presentation state from settings/persistence state:
 
 ```csharp
@@ -792,7 +754,6 @@ public class UIStateModel
 {
     public Vector2 ScrollPosition;
     public bool ShowAdvanced;
-    public float SectionAnimation;
     public int SelectedTab;
     // Transient UI state only
 }
@@ -805,11 +766,11 @@ public class SettingsModel
 }
 ```
 
-**Critical Separation:** UI state (scroll positions, animations, foldouts) must never mix with persistence models that get serialized to config files.
+**Critical Separation:** UI state (scroll positions, foldouts, dropdown open flags) must never mix with persistence models that get serialized to config files.
 
 ---
 
-## 16. Performance Scaling Guide
+## 15. Performance Scaling Guide
 
 | UI Complexity | Control Count | Required Optimization |
 |--------------|---------------|---------------------|
