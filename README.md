@@ -4,7 +4,7 @@ This work-in-progress mod is meant to serve as a showcase/reference of IMGUI UI 
 
 ## Screenshots
 
-![A screenshot showing hovering-tooltip](screenshots/Tooltip.webp "Tooltip")
-![A screenshot showing drop-down selection](screenshots/dropbown.webp "Dropdown")
-![A screenshot showing Docked window](screenshots/dockedwindows.webp "Docked window")
-![A screenshot showing Arm-active-disarm button panel](screenshots/buttonpanel.webp "Button Panel")
+![A screenshot showing hovering-tooltip](Screenshots/Tooltip.webp "Tooltip")
+![A screenshot showing drop-down selection](Screenshots/dropbown.webp "Dropdown")
+![A screenshot showing Docked window](Screenshots/dockedwindows.webp "Docked window")
+![A screenshot showing Arm-active-disarm button panel](Screenshots/buttonpanel.webp "Button Panel")
